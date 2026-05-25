@@ -1,19 +1,25 @@
-# Production Deployment Checklist
+# Production Checklist
 
-## Infrastructure
+## Runtime services
 
-- Flutter app released through Android/iOS stores.
-- NestJS backend runs as a stateless container.
-- PostgreSQL is managed, encrypted at rest, with automated backups.
-- Redis is managed with TLS/auth and eviction policy appropriate for ephemeral keys.
-- TURN is Coturn behind static IPs or a managed TURN provider.
-- HTTPS/WSS is terminated at cloud load balancer or reverse proxy.
-- Socket.IO horizontal scale uses Redis adapter and sticky sessions.
-- Secrets are injected through secret manager, not image layers.
+- [ ] Flutter app built and signed for Android/iOS.
+- [ ] Backend container built from `backend/Dockerfile`.
+- [ ] PostgreSQL is managed or backed up and reachable only from backend network.
+- [ ] Redis is managed or network-isolated.
+- [ ] Coturn or managed TURN is configured for WebRTC NAT traversal.
+- [ ] HTTPS and WSS terminate at a reverse proxy or cloud load balancer.
 
 ## Environment variables
 
-Required:
+Host-local development uses `localhost:15432` and `localhost:56379`.
+Docker-internal backend uses service names:
+
+```env
+DATABASE_URL=postgresql://app:app_password@postgres:5432/random_voice_social?schema=public
+REDIS_URL=redis://redis:6379
+```
+
+Production must set:
 
 - `NODE_ENV=production`
 - `PORT`
@@ -22,69 +28,23 @@ Required:
 - `JWT_SECRET`
 - `JWT_EXPIRES_IN`
 - `CORS_ORIGINS`
-- `MESSAGE_MAX_LENGTH=1000`
-- `MESSAGE_MAX_PER_WINDOW`
-- `MESSAGE_WINDOW_SECONDS`
-- `REPORT_MAX_PER_WINDOW`
-- `REPORT_WINDOW_SECONDS`
-- `QUEUE_MAX_PER_WINDOW`
-- `QUEUE_WINDOW_SECONDS`
-- `TURN_REALM`
-- `TURN_STATIC_AUTH_SECRET` or managed TURN credentials
+- `MESSAGE_MAX_LENGTH`
+- rate limit windows and maxes
+- TURN realm/secret or managed TURN configuration
 
-## Backend deployment steps
+## Deployment gates
 
-1. Build image from `backend/Dockerfile`.
-2. Run Prisma migration job:
-   `npm run prisma:deploy`.
-3. Start API container.
-4. Verify `/health`.
-5. Verify Socket.IO WSS connection.
-6. Verify structured logs include request IDs.
-7. Verify CORS only allows intended app/web origins.
+- [ ] `npx prisma migrate deploy` succeeds.
+- [ ] `npx tsc --noEmit` passes.
+- [ ] `npm test -- --runInBand` passes.
+- [ ] `npm run build` passes.
+- [ ] Flutter `dart analyze` passes.
+- [ ] Flutter tests pass.
+- [ ] Socket smoke test passes against staging.
+- [ ] Health endpoint reports API/database/Redis healthy.
+- [ ] Logs include request IDs and structured errors.
+- [ ] Rollback plan is documented.
 
-## TURN
+## Not in MVP
 
-- Do not ship static TURN usernames/passwords in mobile builds.
-- Prefer REST TURN auth with HMAC short-lived credentials.
-- Rotate TURN auth secret periodically.
-- Monitor relay bandwidth and abuse.
-
-## Observability
-
-- JSON logs to cloud logging.
-- Metrics-ready counters:
-  - anonymous accounts created
-  - sockets authenticated
-  - queue joins
-  - matches created
-  - voice sessions ended by reason
-  - friend adds pending/created
-  - messages sent/rejected
-  - reports submitted
-  - blocks created
-  - rate-limit rejections
-- Alerts:
-  - high report rate
-  - high socket auth failures
-  - DB/Redis health failures
-  - TURN bandwidth spike
-  - queue wait time spike
-
-## Data and privacy
-
-- No exact location collection.
-- No real-name/phone requirement.
-- No audio recording in MVP.
-- Define retention for reports, messages, and deleted users.
-- Add data export/deletion process before public launch.
-- Update privacy policy and terms.
-
-## App store readiness
-
-- Safety policy and moderation contact.
-- Age rating aligned with random live voice interactions.
-- Blocking/reporting visible and functional.
-- Community rules shown before first use.
-- Microphone permission copy explains audio chat.
-- No video/images/files in MVP.
+Do not enable video, image sharing, file sharing, public rooms, discovery, public profiles, exact location, or real-name identity until a separate safety and privacy review is complete.

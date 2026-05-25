@@ -1,109 +1,81 @@
-# Local Setup Instructions
+# Local Setup
 
-## Prerequisites
+## Requirements
 
-- Docker and Docker Compose
+- Windows 10/11 with PowerShell
+- Docker Desktop
 - Node.js 20+
-- npm 10+
-- Flutter 3.19+ with Android/iOS tooling
-- A physical device is recommended for microphone/WebRTC testing
+- Flutter SDK with Android toolchain
+- Android emulator or Android phone
 
-## 1. Configure backend environment
+## Environment files
 
-```bash
-cp backend/.env.example backend/.env
+`backend/.env` is local-only and gitignored. Use host-local service ports:
+
+```env
+NODE_ENV=development
+PORT=3000
+DATABASE_URL=postgresql://app:app_password@localhost:15432/random_voice_social?schema=public
+REDIS_URL=redis://localhost:56379
+JWT_SECRET=local_dev_secret_change_me_32_plus_chars
 ```
 
-For local Docker Compose, use:
+When using the optional Docker backend profile, Docker Compose overrides backend container values to use Docker-network hosts:
 
 ```env
 DATABASE_URL=postgresql://app:app_password@postgres:5432/random_voice_social?schema=public
 REDIS_URL=redis://redis:6379
-JWT_SECRET=replace-with-a-long-random-local-secret
-CORS_ORIGINS=http://localhost:3000,http://localhost:5173
 ```
 
-For running NestJS directly on host while DB/Redis are in Docker, use `localhost` hostnames:
+## Start infrastructure
 
-```env
-DATABASE_URL=postgresql://app:app_password@localhost:5432/random_voice_social?schema=public
-REDIS_URL=redis://localhost:6379
-```
-
-## 2. Start infrastructure
-
-```bash
+```powershell
+cd F:\project
+docker compose config --quiet
 docker compose up -d postgres redis
+docker compose ps
 ```
 
-Optional local TURN:
+Expected host ports:
+- PostgreSQL `localhost:15432`
+- Redis `localhost:56379`
 
-```bash
-docker compose --profile turn up -d coturn
-```
+## Backend
 
-## 3. Install backend dependencies and migrate DB
-
-```bash
-cd backend
+```powershell
+cd F:\project\backend
 npm install
-npm run prisma:generate
-npm run prisma:migrate
-npm run start:dev
+npx prisma generate
+npx prisma validate
+npx prisma migrate dev --name init
+npx tsc --noEmit
+npm test -- --runInBand
+npm run build
+npm run start
 ```
 
-Check health:
+Validate with backend running:
 
-```bash
-curl http://localhost:3000/health
+```powershell
+Invoke-RestMethod -Method Get -Uri http://localhost:3000/health
+npm run test:socket
 ```
 
-Expected:
+## Flutter Android
 
-```json
-{"ok":true,"service":"random-voice-social-backend","time":"..."}
-```
-
-## 4. Run mobile app
-
-```bash
-cd mobile
+```powershell
+cd F:\project\mobile
 flutter pub get
-flutter run --dart-define=API_BASE_URL=http://localhost:3000 --dart-define=SOCKET_URL=http://localhost:3000
+dart analyze
+flutter test
+flutter run
 ```
 
-For Android emulator, `localhost` from the emulator points to the emulator itself. Use:
+Android emulator uses `http://10.0.2.2:3000` by default.
 
-```bash
-flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3000 --dart-define=SOCKET_URL=http://10.0.2.2:3000
-```
+Physical phone:
 
-For a physical device, use your LAN IP and ensure firewall allows port 3000.
-
-## 5. Manual happy-path verification
-
-1. Start backend.
-2. Launch app on two devices/simulators.
-3. Accept rules and age gate on both.
-4. Tap Start on both.
-5. Grant microphone permission.
-6. Confirm both reach matched state.
-7. Confirm WebRTC audio connects.
-8. User A taps Add friend: app shows pending.
-9. User B taps Add friend: both receive friendship created and private chat unlocks.
-10. Send text message in room and verify real-time delivery.
-11. Block peer and verify future matching/messaging is prevented.
-12. Report peer and verify row appears in `Report` table.
-
-## 6. Useful DB commands
-
-```bash
-cd backend
-npm run prisma:studio
-```
-
-## 7. Reset local state
-
-```bash
-docker compose down -v
+```powershell
+ipconfig
+flutter run --dart-define=API_BASE_URL=http://192.168.x.x:3000 --dart-define=SOCKET_URL=http://192.168.x.x:3000
 ```

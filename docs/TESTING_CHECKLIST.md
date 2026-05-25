@@ -1,77 +1,74 @@
 # Testing Checklist
 
-## Backend unit tests
+## Automated local checks
 
-- AuthService creates anonymous user and reuses the same user for the same installation ID.
-- AuthService rejects invalid socket JWT.
-- MatchingService returns waiting when no candidate exists.
-- MatchingService creates VoiceSession when two eligible users join.
-- MatchingService skips stale sockets and self-matches.
-- MatchingService refuses users blocked in either direction.
-- VoiceSessionsService rejects non-members.
-- FriendshipsService uses voiceSessionId, not arbitrary target user ID.
-- FriendshipsService creates pending FriendAdd for one-sided add.
-- FriendshipsService creates normalized Friendship and one ChatRoom for reciprocal add.
-- ChatRoomsService validates membership and block state.
-- MessagesService rejects empty body.
-- MessagesService rejects >1,000 characters.
-- MessagesService sanitizes control characters.
-- MessagesService rate-limits spam.
-- BlocksService prevents duplicate blocks.
-- ReportsService stores voice and message reports and rate-limits abuse.
+Backend:
 
-## Backend integration tests
+```powershell
+cd F:\project\backend
+npm install
+npx prisma generate
+npx prisma validate
+npx prisma migrate dev --name init
+npx tsc --noEmit
+npm test -- --runInBand
+npm run build
+```
 
-- `POST /auth/anonymous` returns stable response shape: `{ token, user, deviceSessionId }`.
-- `GET /me` requires bearer token.
-- `GET /chat-rooms` returns only rooms where user is part of friendship.
-- `GET /chat-rooms/:roomId/messages` rejects non-members.
-- `POST /reports` stores moderation-ready data.
-- `POST /blocks` prevents future chat/matching.
-- Socket must authenticate before `join_queue`.
-- Socket disconnect removes presence and queue marker.
-- `offer`, `answer`, and `ice_candidate` relay only to the voice session partner.
-- `friend_add_current_partner` rejects non-session members.
-- `chat_message_send` emits only to `chat:${roomId}` after validation.
+With backend running on port 3000:
 
-## Flutter tests
+```powershell
+npm run test:socket
+```
 
-- SplashScreen creates or loads anonymous account and routes based on rules acceptance.
-- RulesScreen persists age gate/community rules acceptance.
-- HomeScreen starts voice flow.
-- VoiceChatScreen requests mic permission before WebRTC setup.
-- VoiceCallService uses audio true and video false.
-- VoiceCallService cleans tracks on dispose.
-- ChatService prevents empty and overlength sends.
-- ChatScreen joins/leaves room and appends real-time messages.
-- FriendsInboxScreen loads rooms from backend.
+Flutter:
 
-## Manual WebRTC tests
+```powershell
+cd F:\project\mobile
+flutter pub get
+dart analyze
+flutter test
+```
 
-- Same Wi-Fi direct P2P.
-- Different networks using STUN.
-- Restricted NAT using TURN.
-- Permission denied path.
-- Skip during waiting.
-- Skip after matched.
-- Partner disconnect.
-- Mute/unmute local track.
-- Add friend before WebRTC connected.
-- Report/block during call.
+Docker:
 
-## Abuse/safety tests
+```powershell
+cd F:\project
+docker compose config --quiet
+docker compose up -d postgres redis
+docker compose ps
+```
 
-- A blocked B: A and B are never matched.
-- A blocked B: B cannot send to A in existing room.
-- User spams messages: rate limit triggers stable error.
-- User spams reports: rate limit triggers stable error.
-- Banned user cannot be queued after ModerationService is integrated into MatchingService gate.
-- Empty report details are allowed; invalid reason is rejected.
+## Manual MVP flow
 
-## Load and resilience tests
+- [ ] User A creates anonymous account.
+- [ ] User B creates anonymous account.
+- [ ] User A joins queue.
+- [ ] User B joins queue.
+- [ ] Both users receive `matched` with `voiceSessionId`, `partnerSocketId`, and `initiator`.
+- [ ] WebRTC starts audio only; no video permission or track is requested.
+- [ ] User A mutes and unmutes.
+- [ ] User A ends or skips.
+- [ ] Users can match again if neither has blocked the other.
+- [ ] User A adds friend and sees pending state.
+- [ ] User B adds friend.
+- [ ] One Friendship is created.
+- [ ] One ChatRoom is created.
+- [ ] Friend inbox shows the chat room for both users.
+- [ ] User A sends a text message.
+- [ ] User B receives the message in realtime.
+- [ ] User B replies.
+- [ ] User A receives the reply in realtime.
+- [ ] User A blocks User B.
+- [ ] Chat messages stop after block.
+- [ ] Future matching between those two users is blocked.
 
-- 1,000 sockets connect/authenticate.
-- Queue churn: rapid join/stop/disconnect does not create orphan sessions.
-- Redis restart behavior: presence and queue recover as ephemeral data.
-- PostgreSQL connection failure makes `/health` fail.
-- Socket.IO behind load balancer requires sticky sessions or Redis adapter before horizontal scale.
+## Regression areas
+
+- Socket authentication is required before queue/chat/signaling events.
+- `friend_add_current_partner` uses `voiceSessionId`, not client supplied target user IDs.
+- Chat room membership is validated server-side.
+- Message body is sanitized, non-empty, and max 1,000 characters.
+- Blocks are checked in matching and messaging.
+- Reports are persisted for moderation review.
+- Disconnect removes presence and queue state.

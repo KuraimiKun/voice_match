@@ -11,18 +11,21 @@ class VoiceCallService {
   }
 
   Future<RTCPeerConnection> createPeer({required void Function(RTCIceCandidate) onIceCandidate}) async {
+    await dispose();
     await ensureMicPermission();
     _localStream = await navigator.mediaDevices.getUserMedia({'audio': true, 'video': false});
     final peer = await createPeerConnection({
       'iceServers': [
         {'urls': 'stun:stun.l.google.com:19302'},
         // Production: fetch short-lived TURN credentials from backend instead of hardcoding.
-      ]
+      ],
     });
     for (final track in _localStream!.getAudioTracks()) {
       await peer.addTrack(track, _localStream!);
     }
-    peer.onIceCandidate = (candidate) { if (candidate.candidate != null) onIceCandidate(candidate); };
+    peer.onIceCandidate = (candidate) {
+      if (candidate.candidate != null) onIceCandidate(candidate);
+    };
     _peer = peer;
     return peer;
   }
@@ -41,7 +44,12 @@ class VoiceCallService {
   }
 
   Future<void> acceptAnswer(RTCSessionDescription answer) => _peer!.setRemoteDescription(answer);
-  Future<void> addIceCandidate(RTCIceCandidate candidate) => _peer!.addCandidate(candidate);
+
+  Future<void> addIceCandidate(RTCIceCandidate candidate) async {
+    final peer = _peer;
+    if (peer == null) return;
+    await peer.addCandidate(candidate);
+  }
 
   void setMuted(bool muted) {
     for (final track in _localStream?.getAudioTracks() ?? <MediaStreamTrack>[]) {

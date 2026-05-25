@@ -17,6 +17,10 @@ backend/.env
 Thumbs.db
 .vscode/
 .idea/
+mobile/.metadata
+mobile/.idea/
+mobile/*.iml
+mobile/android/local.properties
 
 # logs
 *.log
