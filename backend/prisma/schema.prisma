@@ -1,0 +1,290 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+  DELETED
+}
+
+enum DevicePlatform {
+  IOS
+  ANDROID
+  WEB
+  UNKNOWN
+}
+
+enum VoiceSessionStatus {
+  CREATED
+  SIGNALING
+  ACTIVE
+  ENDED
+  SKIPPED
+  DISCONNECTED
+  BLOCKED
+}
+
+enum FriendAddStatus {
+  PENDING
+  ACCEPTED
+  CANCELLED
+}
+
+enum ChatRoomType {
+  FRIENDSHIP
+}
+
+enum MessageStatus {
+  SENT
+  DELETED
+  HIDDEN_BY_MODERATION
+}
+
+enum ReportType {
+  USER
+  VOICE_SESSION
+  MESSAGE
+}
+
+enum ReportReason {
+  HARASSMENT
+  HATE_SPEECH
+  SEXUAL_CONTENT
+  UNDERAGE
+  SPAM
+  THREAT
+  PRIVACY
+  OTHER
+}
+
+enum ReportStatus {
+  OPEN
+  TRIAGED
+  ACTIONED
+  DISMISSED
+}
+
+enum ModerationActionType {
+  WARN_USER
+  BAN_USER
+  HIDE_MESSAGE
+  DISMISS_REPORT
+  NOTE
+}
+
+model User {
+  id              String             @id @default(uuid()) @db.Uuid
+  anonymousHandle String             @unique
+  status          UserStatus         @default(ACTIVE)
+  rulesAcceptedAt DateTime?
+  ageGatePassedAt DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  deletedAt       DateTime?
+
+  deviceSessions  DeviceSession[]
+  voiceSessionsA  VoiceSession[]     @relation("VoiceSessionUserA")
+  voiceSessionsB  VoiceSession[]     @relation("VoiceSessionUserB")
+  friendAddsSent  FriendAdd[]        @relation("FriendAddRequester")
+  friendAddsRecv  FriendAdd[]        @relation("FriendAddTarget")
+  friendshipsA    Friendship[]       @relation("FriendshipUserA")
+  friendshipsB    Friendship[]       @relation("FriendshipUserB")
+  messages        Message[]
+  blocksMade      Block[]            @relation("Blocker")
+  blocksReceived  Block[]            @relation("Blocked")
+  reportsMade     Report[]           @relation("Reporter")
+  reportsReceived Report[]           @relation("ReportedUser")
+  moderationActions ModerationAction[] @relation("Moderator")
+  bans            UserBan[]          @relation("BannedUser")
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model DeviceSession {
+  id             String         @id @default(uuid()) @db.Uuid
+  userId         String         @db.Uuid
+  installationId String
+  platform       DevicePlatform @default(UNKNOWN)
+  appVersion     String?
+  lastSeenAt     DateTime       @default(now())
+  revokedAt      DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([installationId])
+  @@index([userId])
+  @@index([revokedAt])
+}
+
+model VoiceSession {
+  id          String             @id @default(uuid()) @db.Uuid
+  userAId     String             @db.Uuid
+  userBId     String             @db.Uuid
+  status      VoiceSessionStatus @default(CREATED)
+  startedAt   DateTime?
+  endedAt     DateTime?
+  endedById   String?            @db.Uuid
+  endReason   String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  userA   User @relation("VoiceSessionUserA", fields: [userAId], references: [id], onDelete: Restrict)
+  userB   User @relation("VoiceSessionUserB", fields: [userBId], references: [id], onDelete: Restrict)
+  reports Report[]
+
+  @@index([userAId, status])
+  @@index([userBId, status])
+  @@index([status, createdAt])
+}
+
+model FriendAdd {
+  id          String          @id @default(uuid()) @db.Uuid
+  requesterId String          @db.Uuid
+  targetId    String          @db.Uuid
+  status      FriendAddStatus @default(PENDING)
+  voiceSessionId String?      @db.Uuid
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  requester User @relation("FriendAddRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  target    User @relation("FriendAddTarget", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@unique([requesterId, targetId])
+  @@index([targetId, status])
+  @@index([requesterId, status])
+}
+
+model Friendship {
+  id        String     @id @default(uuid()) @db.Uuid
+  userAId   String     @db.Uuid
+  userBId   String     @db.Uuid
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  deletedAt DateTime?
+
+  userA    User       @relation("FriendshipUserA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB    User       @relation("FriendshipUserB", fields: [userBId], references: [id], onDelete: Cascade)
+  chatRoom ChatRoom?
+
+  @@unique([userAId, userBId])
+  @@index([userAId])
+  @@index([userBId])
+  @@index([deletedAt])
+}
+
+model ChatRoom {
+  id           String       @id @default(uuid()) @db.Uuid
+  type         ChatRoomType @default(FRIENDSHIP)
+  friendshipId String      @unique @db.Uuid
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  deletedAt    DateTime?
+
+  friendship Friendship @relation(fields: [friendshipId], references: [id], onDelete: Cascade)
+  messages   Message[]
+  reports    Report[]
+
+  @@index([deletedAt])
+}
+
+model Message {
+  id        String        @id @default(uuid()) @db.Uuid
+  roomId    String        @db.Uuid
+  senderId  String        @db.Uuid
+  body      String        @db.VarChar(1000)
+  status    MessageStatus @default(SENT)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  deletedAt DateTime?
+
+  room   ChatRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  sender User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  reports Report[]
+
+  @@index([roomId, createdAt])
+  @@index([senderId, createdAt])
+  @@index([deletedAt])
+}
+
+model Block {
+  id        String   @id @default(uuid()) @db.Uuid
+  blockerId String   @db.Uuid
+  blockedId String   @db.Uuid
+  reason    String?
+  createdAt DateTime @default(now())
+
+  blocker User @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+  @@index([blockedId])
+  @@index([blockerId, createdAt])
+}
+
+model Report {
+  id             String       @id @default(uuid()) @db.Uuid
+  reporterId     String       @db.Uuid
+  reportedUserId String?      @db.Uuid
+  voiceSessionId String?      @db.Uuid
+  messageId      String?      @db.Uuid
+  chatRoomId     String?      @db.Uuid
+  type           ReportType
+  reason         ReportReason
+  details        String?      @db.VarChar(2000)
+  status         ReportStatus @default(OPEN)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  reporter     User          @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  reportedUser User?         @relation("ReportedUser", fields: [reportedUserId], references: [id], onDelete: SetNull)
+  voiceSession VoiceSession? @relation(fields: [voiceSessionId], references: [id], onDelete: SetNull)
+  message      Message?      @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  chatRoom     ChatRoom?     @relation(fields: [chatRoomId], references: [id], onDelete: SetNull)
+  actions      ModerationAction[]
+
+  @@index([status, createdAt])
+  @@index([reportedUserId, createdAt])
+  @@index([reporterId, createdAt])
+}
+
+model ModerationAction {
+  id          String               @id @default(uuid()) @db.Uuid
+  reportId    String?              @db.Uuid
+  moderatorId String?              @db.Uuid
+  targetUserId String?             @db.Uuid
+  type        ModerationActionType
+  note        String?              @db.VarChar(2000)
+  createdAt   DateTime             @default(now())
+
+  report    Report? @relation(fields: [reportId], references: [id], onDelete: SetNull)
+  moderator User?   @relation("Moderator", fields: [moderatorId], references: [id], onDelete: SetNull)
+
+  @@index([reportId])
+  @@index([targetUserId, createdAt])
+}
+
+model UserBan {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  reason    String
+  startsAt  DateTime @default(now())
+  expiresAt DateTime?
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation("BannedUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+  @@index([revokedAt, startsAt])
+}

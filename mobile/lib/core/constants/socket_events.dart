@@ -1,0 +1,32 @@
+class SocketEvents {
+  static const socketAuthenticate = 'socket_authenticate';
+  static const socketAuthenticated = 'socket_authenticated';
+  static const socketAuthError = 'socket_auth_error';
+  static const joinQueue = 'join_queue';
+  static const waiting = 'waiting';
+  static const matched = 'matched';
+  static const stopSearching = 'stop_searching';
+  static const skip = 'skip';
+  static const partnerLeft = 'partner_left';
+  static const offer = 'offer';
+  static const answer = 'answer';
+  static const iceCandidate = 'ice_candidate';
+  static const friendAddCurrentPartner = 'friend_add_current_partner';
+  static const friendAddPending = 'friend_add_pending';
+  static const friendshipCreated = 'friendship_created';
+  static const friendRoomsLoad = 'friend_rooms_load';
+  static const friendRooms = 'friend_rooms';
+  static const joinChatRoom = 'join_chat_room';
+  static const chatHistory = 'chat_history';
+  static const chatMessageSend = 'chat_message_send';
+  static const chatMessageNew = 'chat_message_new';
+  static const typingStart = 'typing_start';
+  static const typingStop = 'typing_stop';
+  static const leaveChatRoom = 'leave_chat_room';
+  static const reportUser = 'report_user';
+  static const reportMessage = 'report_message';
+  static const blockUser = 'block_user';
+  static const userBlocked = 'user_blocked';
+  static const errorMessage = 'error_message';
+  static const endCall = 'end_call';
+}

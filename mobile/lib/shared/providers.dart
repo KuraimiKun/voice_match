@@ -1,0 +1,23 @@
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../core/network/api_client.dart';
+import '../core/storage/local_storage_service.dart';
+import '../features/auth/data/auth_service.dart';
+import '../features/voice_chat/data/socket_service.dart';
+import '../features/voice_chat/data/voice_call_service.dart';
+import '../features/voice_chat/data/matching_service.dart';
+import '../features/friends/data/friendship_service.dart';
+import '../features/chat/data/chat_service.dart';
+import '../features/reports/data/report_service.dart';
+import '../features/blocks/data/block_service.dart';
+
+final localStorageProvider = Provider((_) => LocalStorageService(const FlutterSecureStorage()));
+final apiClientProvider = Provider((ref) => ApiClient(ref.watch(localStorageProvider)));
+final authServiceProvider = Provider((ref) => AuthService(ref.watch(apiClientProvider), ref.watch(localStorageProvider)));
+final socketServiceProvider = Provider((ref) => SocketService(ref.watch(localStorageProvider)));
+final voiceCallServiceProvider = Provider((_) => VoiceCallService());
+final matchingServiceProvider = Provider((ref) => MatchingService(ref.watch(socketServiceProvider)));
+final friendshipServiceProvider = Provider((ref) => FriendshipService(ref.watch(socketServiceProvider)));
+final chatServiceProvider = Provider((ref) => ChatService(ref.watch(apiClientProvider), ref.watch(socketServiceProvider)));
+final reportServiceProvider = Provider((ref) => ReportService(ref.watch(apiClientProvider), ref.watch(socketServiceProvider)));
+final blockServiceProvider = Provider((ref) => BlockService(ref.watch(apiClientProvider), ref.watch(socketServiceProvider)));
