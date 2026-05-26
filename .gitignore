@@ -5,6 +5,7 @@ mobile/.dart_tool/
 # build outputs
 backend/dist/
 mobile/build/
+mobile/android/build/
 mobile/.flutter-plugins
 mobile/.flutter-plugins-dependencies
 

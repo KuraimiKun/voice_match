@@ -2,6 +2,42 @@
 
 This guide is for Windows PowerShell local testing with Android emulator and/or a physical Android phone.
 
+## Current local test result
+
+Test date: 2026-05-26 SEAST
+
+Devices attempted:
+- Android emulator: Pixel 3a API 34, `emulator-5554`
+- Physical Android phone: `138122553K024909`, blocked because ADB reported `unauthorized`
+
+Backend URL used:
+- Host checks: `http://localhost:3000`
+- Emulator app default: `http://10.0.2.2:3000`
+- Physical phone: not run; use `http://<PC-LAN-IP>:3000` after USB authorization and firewall setup
+
+Passed:
+- Docker Compose config validation.
+- PostgreSQL and Redis local containers were healthy.
+- Backend `/health` returned healthy API/database/Redis checks.
+- Backend socket smoke test passed for auth, matching, signaling relay, mutual friend unlock, chat delivery, block acknowledgement, and post-block message rejection.
+- Flutter `pub get`, `dart analyze`, and `flutter test` passed.
+- Android debug APK built successfully.
+- Android emulator installed and launched `com.example.random_voice_social_app/.MainActivity`.
+
+Failed or blocked:
+- Full two-device manual E2E was not completed in this agent-run because only one Android target was authorized.
+- Physical phone was detected but unauthorized. Accept the USB debugging/RSA prompt on the phone, then re-run `adb devices` until it shows `device`.
+- Initial Android build failed with old `flutter_webrtc` Android embedding compile errors. This was fixed by updating `flutter_webrtc` and using in-process Kotlin compilation for local Windows builds.
+
+Fixes made:
+- Updated `flutter_webrtc` to a current Android-compatible version.
+- Added local Gradle/Kotlin stability settings for Windows debug builds.
+
+Remaining risks:
+- Real microphone permission, live WebRTC audio, and two-device UI interaction still need a human-driven two-device pass.
+- Physical phone connectivity may require Windows Firewall inbound TCP port 3000 and correct PC LAN IP.
+- Production WebRTC still requires TURN/Coturn or managed TURN with short-lived credentials.
+
 ## 1. Start Docker Desktop
 
 Open Docker Desktop from the Start menu, or run:
@@ -55,15 +91,22 @@ Start the backend:
 
 ```powershell
 cd F:\project\backend
-npm run build
 npm run start
 ```
 
-Expected: backend listens on `http://localhost:3000`.
+Health check:
 
-## 5. Validate REST auth and health
+```powershell
+Invoke-RestMethod -Method Get -Uri http://localhost:3000/health
+```
 
-Open a second PowerShell window:
+Expected:
+- `ok` is `true`
+- `checks.api`, `checks.database`, and `checks.redis` are `healthy`
+
+## 5. Validate anonymous auth REST flow
+
+In another PowerShell:
 
 ```powershell
 $body = @{
@@ -113,6 +156,7 @@ cd F:\project\mobile
 flutter pub get
 dart analyze
 flutter test
+flutter build apk --debug
 flutter run
 ```
 
@@ -126,6 +170,14 @@ SOCKET_URL=http://10.0.2.2:3000
 ## 8. Physical Android phone setup
 
 Phone and PC must be on the same Wi-Fi.
+
+Before running on a USB-connected phone, authorize ADB:
+
+```powershell
+adb devices
+```
+
+If the device shows `unauthorized`, unlock the phone and accept the USB debugging/RSA prompt. Reconnect the cable or toggle USB debugging if the prompt does not appear. Continue only when `adb devices` shows `device`.
 
 Find the PC IPv4 address:
 
@@ -154,28 +206,30 @@ Replace `192.168.x.x` with the PC IPv4 address.
 
 Use either two emulators, emulator + physical phone, or two physical phones.
 
-1. User A creates anonymous account.
-2. User B creates anonymous account.
-3. User A joins queue.
-4. User B joins queue.
-5. Both users receive matched.
-6. WebRTC audio-only call starts.
-7. User A mutes.
-8. User A unmutes.
-9. User A ends or skips.
-10. Users can match again if not blocked.
-11. User A adds friend.
-12. User B adds friend.
-13. One Friendship is created.
-14. One ChatRoom is created.
-15. Friend inbox shows chat room.
-16. User A sends message.
-17. User B receives message.
-18. User B replies.
-19. User A receives reply.
-20. User A blocks User B.
-21. Chat messages stop.
-22. Future matching between the two users is blocked.
+1. User A opens app.
+2. User B opens app.
+3. User A creates anonymous account.
+4. User B creates anonymous account.
+5. User A joins queue.
+6. User B joins queue.
+7. Both users receive matched.
+8. WebRTC audio-only call starts.
+9. User A mutes.
+10. User A unmutes.
+11. User A ends or skips.
+12. Users can match again if not blocked.
+13. User A adds friend.
+14. User B adds friend.
+15. One Friendship is created.
+16. One ChatRoom is created.
+17. Friend inbox shows chat room.
+18. User A sends message.
+19. User B receives message.
+20. User B replies.
+21. User A receives reply.
+22. User A blocks User B.
+23. Chat messages stop.
+24. Future matching between the two users is blocked.
 
 ## 10. Troubleshooting
 
@@ -189,6 +243,21 @@ netstat -ano | findstr ":56379"
 ```
 
 This project intentionally avoids common ERP ports by using `15432` and `56379` on the host.
+
+### Backend port 3000 already in use
+
+Check the process:
+
+```powershell
+netstat -ano | findstr ":3000"
+Invoke-RestMethod -Method Get -Uri http://localhost:3000/health
+```
+
+If `/health` is healthy, the backend may already be running. Do not start a second copy. If the process is stale, stop it:
+
+```powershell
+Stop-Process -Id <PID> -Force
+```
 
 ### Prisma generate EPERM on Windows
 
@@ -207,6 +276,28 @@ Use `10.0.2.2`, not `localhost`, from Android emulator.
 ### Phone cannot reach backend
 
 Use the PC LAN IP with `--dart-define`, verify both devices are on the same Wi-Fi, and allow firewall port 3000.
+
+### Android build fails on Flutter WebRTC Registrar
+
+If the Android build fails with `PluginRegistry.Registrar` from `flutter_webrtc`, run:
+
+```powershell
+cd F:\project\mobile
+flutter pub get
+flutter build apk --debug
+```
+
+The project should use a current `flutter_webrtc` version compatible with the current Flutter Android embedding.
+
+### Kotlin compile daemon does not connect on Windows
+
+This project sets local Gradle properties to use in-process Kotlin compilation. If Gradle still hangs, stop daemons and retry:
+
+```powershell
+cd F:\project\mobile
+.\android\gradlew --stop
+flutter build apk --debug
+```
 
 ### WebRTC connects locally but not across networks
 
