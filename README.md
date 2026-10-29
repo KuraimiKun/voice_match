@@ -18,7 +18,7 @@ MVP exclusions: no video, no image/file sharing, no public rooms, no discovery, 
 Start infrastructure:
 
 ```powershell
-cd F:\project
+# From repository root
 docker compose up -d postgres redis
 docker compose ps
 ```
@@ -26,7 +26,7 @@ docker compose ps
 Backend:
 
 ```powershell
-cd F:\project\backend
+cd backend
 npm install
 npx prisma generate
 npx prisma validate
@@ -46,14 +46,14 @@ Invoke-RestMethod -Method Get -Uri http://localhost:3000/health
 Socket smoke test, with backend running:
 
 ```powershell
-cd F:\project\backend
+cd backend
 npm run test:socket
 ```
 
 Flutter:
 
 ```powershell
-cd F:\project\mobile
+cd mobile
 flutter pub get
 dart analyze
 flutter test
